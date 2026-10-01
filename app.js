@@ -136,6 +136,15 @@
     return localStorage.getItem(localKey(stateKey));
   }
 
+  function clearLocalUserState() {
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith("winterArc:") && k !== "winterArc:dark") keys.push(k);
+    }
+    keys.forEach((k) => localStorage.removeItem(k));
+  }
+
   function applyStateToPage() {
     document.querySelectorAll("[data-check]").forEach((el) => {
       const saved = getState(el.dataset.check);
@@ -170,9 +179,13 @@
     const button = document.createElement("button");
     button.className = "pill";
     button.type = "button";
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
       if (currentUser) {
-        supabase.auth.signOut();
+        await supabase.auth.signOut();
+        currentUser = null;
+        clearLocalUserState();
+        applyStateToPage();
+        renderAuthState();
       } else {
         showAuthModal();
       }
@@ -238,12 +251,14 @@
       const message = modal.querySelector("#winter-auth-message");
       message.textContent = "Signing in…";
 
+      const previousUserId = currentUser?.id || null;
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         message.textContent = error.message;
         return;
       }
       currentUser = data.user;
+      if (previousUserId && previousUserId !== currentUser.id) clearLocalUserState();
       await pullCloudState();
       modal.hidden = true;
       renderAuthState();
@@ -323,7 +338,12 @@
 
     if (supabase) {
       supabase.auth.onAuthStateChange(async (_event, session) => {
-        currentUser = session?.user || null;
+        const nextUser = session?.user || null;
+        if (!nextUser && currentUser) {
+          clearLocalUserState();
+          applyStateToPage();
+        }
+        currentUser = nextUser;
         renderAuthState();
         if (currentUser) await pullCloudState();
       });
