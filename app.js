@@ -4,14 +4,16 @@
  * once a user is signed in.
  */
 (() => {
-  const CONFIG = window.WINTER_ARC_CONFIG || {};
-  const hasConfig =
-    typeof CONFIG.SUPABASE_URL === "string" &&
-    CONFIG.SUPABASE_URL.startsWith("https://") &&
-    !CONFIG.SUPABASE_URL.includes("PASTE_") &&
-    typeof CONFIG.SUPABASE_PUBLISHABLE_KEY === "string" &&
-    CONFIG.SUPABASE_PUBLISHABLE_KEY.startsWith("sb_") &&
-    !CONFIG.SUPABASE_PUBLISHABLE_KEY.includes("PASTE_");
+  const getConfig = () => window.WINTER_ARC_CONFIG || {};
+  const hasConfig = () => {
+    const config = getConfig();
+    return typeof config.SUPABASE_URL === "string" &&
+      config.SUPABASE_URL.startsWith("https://") &&
+      !config.SUPABASE_URL.includes("PASTE_") &&
+      typeof config.SUPABASE_PUBLISHABLE_KEY === "string" &&
+      config.SUPABASE_PUBLISHABLE_KEY.startsWith("sb_") &&
+      !config.SUPABASE_PUBLISHABLE_KEY.includes("PASTE_");
+  };
 
   let supabase = null;
   let currentUser = null;
@@ -32,14 +34,15 @@
   }
 
   async function initCloud() {
-    if (!hasConfig) return;
+    if (!hasConfig()) return;
     try {
       if (!window.supabase) {
         await loadScript("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2");
       }
+      const config = getConfig();
       supabase = window.supabase.createClient(
-        CONFIG.SUPABASE_URL,
-        CONFIG.SUPABASE_PUBLISHABLE_KEY,
+        config.SUPABASE_URL,
+        config.SUPABASE_PUBLISHABLE_KEY,
         {
           auth: {
             autoRefreshToken: true,
@@ -185,8 +188,8 @@
     if (!button) return;
     button.textContent = currentUser
       ? "↪ " + (currentUser.email || "account")
-      : hasConfig
-        ? "Sign in";
+      : hasConfig()
+        ? "Sign in"
         : "Cloud setup";
   }
 
@@ -309,6 +312,9 @@
   }
 
   async function boot() {
+    if (!window.WINTER_ARC_CONFIG) {
+      try { await loadScript("supabase-config.js"); } catch (_) {}
+    }
     addAuthUI();
     bindTheme();
     bindLocalAndCloudState();
