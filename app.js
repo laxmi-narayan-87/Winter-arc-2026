@@ -80,7 +80,7 @@
     const cloudKeys = new Set();
     for (const row of data || []) {
       cloudKeys.add(row.state_key);
-      localStorage.setItem(localKey(row.state_key), String(row.value));
+      localStorage.setItem(localKey(row.state_key), typeof row.value === "string" ? row.value : JSON.stringify(row.value));
     }
 
     // Migrate existing local progress once, without overwriting cloud values.
@@ -108,6 +108,7 @@
     }
 
     applyStateToPage();
+    renderDay1FromCloud();
   }
 
   async function saveState(stateKey, value) {
@@ -143,6 +144,44 @@
       if (k && k.startsWith("winterArc:") && k !== "winterArc:dark") keys.push(k);
     }
     keys.forEach((k) => localStorage.removeItem(k));
+  }
+
+  function renderDay1FromCloud() {
+    const card = document.getElementById("day1-card");
+    if (!card) return;
+    const raw = getState("day:2026-10-01");
+    if (!raw) {
+      card.innerHTML = '<span class="micro">Day 1 · October 1, 2026</span><h2>No Day 1 record yet</h2><p>Sign in to load your completed Day 1 record from Supabase.</p>';
+      return;
+    }
+    try {
+      const record = JSON.parse(raw);
+      const tasks = Array.isArray(record.tasks) ? record.tasks : [];
+      const completed = tasks.filter((task) => task.done).length;
+      card.innerHTML = '<span class="micro">Day 1 · October 1, 2026</span><h2>' + completed + ' / ' + tasks.length + ' complete ✓</h2><div class="list"></div>';
+      const list = card.querySelector(".list");
+      tasks.forEach((task) => {
+        const row = document.createElement("label");
+        row.className = "row";
+        const input = document.createElement("input");
+        input.className = "check";
+        input.type = "checkbox";
+        input.checked = task.done === true;
+        input.disabled = true;
+        const copy = document.createElement("span");
+        copy.className = "copy";
+        const title = document.createElement("b");
+        title.textContent = task.title || "Task";
+        const detail = document.createElement("small");
+        detail.textContent = task.detail ? task.detail + " · " + (task.done ? "completed" : "pending") : (task.done ? "completed" : "pending");
+        copy.append(title, detail);
+        row.append(input, copy);
+        list.append(row);
+      });
+    } catch (error) {
+      card.innerHTML = '<span class="micro">Day 1 · October 1, 2026</span><h2>Could not read Day 1</h2><p>The Supabase record is not valid JSON.</p>';
+      console.warn("Could not render Day 1 cloud record:", error);
+    }
   }
 
   function applyStateToPage() {
@@ -334,7 +373,7 @@
     bindTheme();
     bindLocalAndCloudState();
     await initCloud();
-    if (currentUser) applyStateToPage();
+    if (currentUser) { applyStateToPage(); renderDay1FromCloud(); }
 
     if (supabase) {
       supabase.auth.onAuthStateChange(async (_event, session) => {
@@ -346,6 +385,7 @@
         currentUser = nextUser;
         renderAuthState();
         if (currentUser) await pullCloudState();
+        renderDay1FromCloud();
       });
     }
   }
