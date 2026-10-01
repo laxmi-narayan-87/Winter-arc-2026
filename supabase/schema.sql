@@ -1,5 +1,5 @@
 -- Winter Arc 2026 private data schema
--- Run this once in the Supabase SQL Editor.
+-- Apply through Supabase migrations.
 
 create table if not exists public.user_state (
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -10,12 +10,10 @@ create table if not exists public.user_state (
   primary key (user_id, state_key)
 );
 
-create index if not exists user_state_user_id_idx
-  on public.user_state(user_id);
-
 create or replace function public.set_user_state_updated_at()
 returns trigger
 language plpgsql
+set search_path = public
 as $$
 begin
   new.updated_at = now();
@@ -57,12 +55,9 @@ to authenticated
 using ((select auth.uid()) = user_id)
 with check ((select auth.uid()) = user_id);
 
-drop policy if exists "users can delete their own state" on public.user_state;
-create policy "users can delete their own state"
-on public.user_state
+drop policy if exists "users can delete their own state" on public.user_state
 for delete
 to authenticated
 using ((select auth.uid()) = user_id);
 
--- Defense-in-depth: no public/anonymous table access.
 revoke all on table public.user_state from anon;
