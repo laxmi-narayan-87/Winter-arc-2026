@@ -60,6 +60,7 @@
         await pullCloudState();
       }
       cloudReady = true;
+      window.WINTER_ARC_SUPABASE = supabase;
       renderAuthState();
     } catch (error) {
       console.warn("Winter Arc cloud storage unavailable; using local cache.", error);
