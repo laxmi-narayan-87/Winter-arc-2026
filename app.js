@@ -18,6 +18,8 @@
   let supabase = null;
   let currentUser = null;
   let cloudReady = false;
+  let day1Template = null;
+  let day1Record = null;
   const pendingWrites = new Map();
 
   const localKey = (key) => `winterArc:${key}`;
@@ -111,6 +113,20 @@
     renderDay1FromCloud();
   }
 
+  async function saveStructuredState(stateKey, value) {
+    if (!supabase || !currentUser) return;
+    const { error } = await supabase.from("user_state").upsert(
+      { user_id: currentUser.id, state_key: stateKey, value },
+      { onConflict: "user_id,state_key" }
+    );
+    if (error) {
+      console.warn("Could not save structured private state:", error.message);
+      return;
+    }
+    localStorage.setItem(localKey(stateKey), JSON.stringify(value));
+    day1Record = stateKey === "day:2026-10-01" ? value : day1Record;
+  }
+
   async function saveState(stateKey, value) {
     localStorage.setItem(localKey(stateKey), String(value));
 
@@ -146,43 +162,88 @@
     keys.forEach((k) => localStorage.removeItem(k));
   }
 
-  function renderDay1FromCloud() {
+  async function loadDay1FromCloud() {
     const card = document.getElementById("day1-card");
-    if (!card) return;
-    const raw = getState("day:2026-10-01");
-    if (!raw) {
-      card.innerHTML = '<span class="micro">Day 1 · October 1, 2026</span><h2>No Day 1 record yet</h2><p>Sign in to load your completed Day 1 record from Supabase.</p>';
+    if (!card || !supabase || !currentUser) return;
+
+    const { data: template, error: templateError } = await supabase
+      .from("day_templates")
+      .select("day_number,day_date,title,tasks")
+      .eq("day_number", 1)
+      .single();
+
+    if (templateError) {
+      card.innerHTML = '<span class="micro">Day 1 · October 1, 2026</span><h2>Day 1 unavailable</h2><p>Could not load the Day 1 template from Supabase.</p>';
+      console.warn("Could not load Day 1 template:", templateError.message);
       return;
     }
-    try {
-      const record = JSON.parse(raw);
-      const tasks = Array.isArray(record.tasks) ? record.tasks : [];
-      const completed = tasks.filter((task) => task.done).length;
-      card.innerHTML = '<span class="micro">Day 1 · October 1, 2026</span><h2>' + completed + ' / ' + tasks.length + ' complete ✓</h2><div class="list"></div>';
-      const list = card.querySelector(".list");
-      tasks.forEach((task) => {
-        const row = document.createElement("label");
-        row.className = "row";
-        const input = document.createElement("input");
-        input.className = "check";
-        input.type = "checkbox";
-        input.checked = task.done === true;
-        input.disabled = true;
-        const copy = document.createElement("span");
-        copy.className = "copy";
-        const title = document.createElement("b");
-        title.textContent = task.title || "Task";
-        const detail = document.createElement("small");
-        detail.textContent = task.detail ? task.detail + " · " + (task.done ? "completed" : "pending") : (task.done ? "completed" : "pending");
-        copy.append(title, detail);
-        row.append(input, copy);
-        list.append(row);
+
+    const { data: record, error: recordError } = await supabase
+      .from("user_state")
+      .select("value")
+      .eq("state_key", "day:2026-10-01")
+      .maybeSingle();
+
+    if (recordError) {
+      console.warn("Could not load Day 1 completion:", recordError.message);
+    }
+
+    day1Template = template;
+    day1Record = record?.value || null;
+    renderDay1FromCloud();
+  }
+
+  function renderDay1FromCloud() {
+    const card = document.getElementById("day1-card");
+    if (!card || !day1Template) return;
+
+    const tasks = Array.isArray(day1Template.tasks) ? day1Template.tasks : [];
+    const completedIds = new Set(
+      Array.isArray(day1Record?.completed_task_ids) ? day1Record.completed_task_ids : []
+    );
+    const completed = tasks.filter((task) => completedIds.has(task.id)).length;
+
+    card.innerHTML = '<span class="micro">Day 1 · October 1, 2026</span><h2>' +
+      completed + ' / ' + tasks.length + ' complete ' + (completed === tasks.length && tasks.length ? '✓' : '') +
+      '</h2><div class="list"></div>' +
+      (day1Record ? '' : '<button class="button primary" type="button" data-sync-day1>Sync completed Day 1</button>');
+
+    const list = card.querySelector(".list");
+    tasks.forEach((task) => {
+      const row = document.createElement("label");
+      row.className = "row";
+      const input = document.createElement("input");
+      input.className = "check";
+      input.type = "checkbox";
+      input.checked = completedIds.has(task.id);
+      input.disabled = true;
+      const copy = document.createElement("span");
+      copy.className = "copy";
+      const title = document.createElement("b");
+      title.textContent = task.title || "Task";
+      const detail = document.createElement("small");
+      detail.textContent = task.detail || "";
+      copy.append(title, detail);
+      row.append(input, copy);
+      list.append(row);
+    });
+
+    const sync = card.querySelector("[data-sync-day1]");
+    if (sync) {
+      sync.addEventListener("click", async () => {
+        const completedTaskIds = tasks.map((task) => task.id);
+        await saveStructuredState("day:2026-10-01", {
+          date: "2026-10-01",
+          day: 1,
+          status: "complete",
+          completed_task_ids: completedTaskIds,
+          completed_at: new Date().toISOString()
+        });
+        await loadDay1FromCloud();
       });
-    } catch (error) {
-      card.innerHTML = '<span class="micro">Day 1 · October 1, 2026</span><h2>Could not read Day 1</h2><p>The Supabase record is not valid JSON.</p>';
-      console.warn("Could not render Day 1 cloud record:", error);
     }
   }
+
 
   function applyStateToPage() {
     document.querySelectorAll("[data-check]").forEach((el) => {
@@ -373,7 +434,7 @@
     bindTheme();
     bindLocalAndCloudState();
     await initCloud();
-    if (currentUser) { applyStateToPage(); renderDay1FromCloud(); }
+    if (currentUser) { applyStateToPage(); await loadDay1FromCloud(); }
 
     if (supabase) {
       supabase.auth.onAuthStateChange(async (_event, session) => {
@@ -385,7 +446,7 @@
         currentUser = nextUser;
         renderAuthState();
         if (currentUser) await pullCloudState();
-        renderDay1FromCloud();
+        if (currentUser) await loadDay1FromCloud();
       });
     }
   }
