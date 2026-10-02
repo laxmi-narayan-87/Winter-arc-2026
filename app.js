@@ -173,30 +173,47 @@
     keys.forEach((k) => localStorage.removeItem(k));
   }
 
+  function getIndiaDateKey() {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).format(new Date());
+  }
+
   async function loadDay1FromCloud() {
     const card = document.getElementById("day1-card");
     if (!card || !supabase || !currentUser) return;
+    const todayKey = getIndiaDateKey();
 
     const { data: template, error: templateError } = await supabase
       .from("day_templates")
       .select("day_number,day_date,title,tasks")
-      .eq("day_number", 1)
-      .single();
+      .eq("day_date", todayKey)
+      .maybeSingle();
 
     if (templateError) {
-      card.innerHTML = '<span class="micro">Day 1 · October 1, 2026</span><h2>Day 1 unavailable</h2><p>Could not load the Day 1 template from Supabase.</p>';
-      console.warn("Could not load Day 1 template:", templateError.message);
+      card.innerHTML = '<span class="micro">TODAY · ' + todayKey + '</span><h2>Today unavailable</h2><p>Could not load today\'s plan from Supabase.</p>';
+      console.warn("Could not load today's template:", templateError.message);
+      return;
+    }
+
+    if (!template) {
+      card.innerHTML = '<span class="micro">TODAY · ' + todayKey + '</span><h2>No plan published for today</h2><p>Add today\'s entry to <code>day_templates</code> and it will appear here automatically.</p>';
+      day1Template = null;
+      day1Record = null;
       return;
     }
 
     const { data: record, error: recordError } = await supabase
       .from("user_state")
       .select("value")
-      .eq("state_key", "day:2026-10-01")
+      .eq("state_key", "day:" + todayKey)
       .maybeSingle();
 
     if (recordError) {
-      console.warn("Could not load Day 1 completion:", recordError.message);
+      console.warn("Could not load today's completion:", recordError.message);
     }
 
     day1Template = template;
@@ -213,11 +230,12 @@
       Array.isArray(day1Record?.completed_task_ids) ? day1Record.completed_task_ids : []
     );
     const completed = tasks.filter((task) => completedIds.has(task.id)).length;
+    const dateLabel = day1Template.day_date;
 
-    card.innerHTML = '<span class="micro">Day 1 · October 1, 2026</span><h2>' +
+    card.innerHTML = '<span class="micro">Day ' + day1Template.day_number + ' · ' + dateLabel + '</span><h2>' +
       completed + ' / ' + tasks.length + ' complete ' + (completed === tasks.length && tasks.length ? '✓' : '') +
       '</h2><div class="list"></div>' +
-      (day1Record ? '' : '<button class="button primary" type="button" data-sync-day1>Sync completed Day 1</button>');
+      (day1Record ? '' : '<button class="button primary" type="button" data-sync-day1>Sync completed day</button>');
 
     const list = card.querySelector(".list");
     tasks.forEach((task) => {
@@ -243,14 +261,22 @@
     if (sync) {
       sync.addEventListener("click", async () => {
         const completedTaskIds = tasks.map((task) => task.id);
-        await saveStructuredState("day:2026-10-01", {
-          date: "2026-10-01",
-          day: 1,
-          status: "complete",
-          completed_task_ids: completedTaskIds,
-          completed_at: new Date().toISOString()
-        });
-        await loadDay1FromCloud();
+        sync.disabled = true;
+        sync.textContent = "Saving…";
+        try {
+          await saveStructuredState("day:" + day1Template.day_date, {
+            date: day1Template.day_date,
+            day: day1Template.day_number,
+            status: "complete",
+            completed_task_ids: completedTaskIds,
+            completed_at: new Date().toISOString()
+          });
+          await loadDay1FromCloud();
+        } catch (error) {
+          sync.disabled = false;
+          sync.textContent = "Sync completed day";
+          console.warn("Could not save today's completion:", error.message);
+        }
       });
     }
   }
