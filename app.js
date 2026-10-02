@@ -552,7 +552,7 @@
   async function buildPublicSnapshot(settings) {
     if (!supabase || !currentUser) throw new Error("Sign in first.");
     const safe = {
-      progress:true, streak:true, daily_tasks:false, projects:false, skills:false,
+      progress:true, streak:true, today_progress:false, daily_tasks:false, projects:false, skills:false,
       milestones:false, learning:false, timeline:false, fitness:false, notes:false,
       ...(settings || {})
     };
@@ -572,6 +572,11 @@
     const snap={version:2,generated_at:new Date().toISOString()};
     if(safe.progress) snap.progress={days_completed:completedDays,days_total:days.length,tasks_completed:completedTasks,tasks_total:totalTasks,completion_rate:totalTasks?Math.round(completedTasks/totalTasks*100):0};
     if(safe.streak) snap.streak={current:streak};
+    if(safe.today_progress){
+      const todayKey=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Kolkata",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+      const today=days.find(d=>d.date===todayKey);
+      if(today) snap.today={day:today.day,date:today.date,title:today.title,completed:today.completed,total:today.total,complete:today.complete,tasks:Array.isArray(today.tasks)?today.tasks:tasksForToday(templates,state,todayKey)};
+    }
     if(safe.daily_tasks) snap.days=days;
     if(safe.notes && typeof state.todayNote==="string") snap.note=state.todayNote;
     if(safe.projects) snap.projects=await getStructuredRows("projects","id,name,description,status,progress,url",{column:"created_at",ascending:false});
@@ -581,6 +586,14 @@
     if(safe.timeline) snap.timeline=await getStructuredRows("timeline_entries","id,title,description,entry_date,status",{column:"entry_date"});
     if(safe.fitness) snap.fitness=state.fitness||{};
     return snap;
+  }
+
+  function tasksForToday(templates,state,todayKey){
+    const template=(templates||[]).find(t=>t.day_date===todayKey);
+    if(!template) return [];
+    const record=state["day:"+todayKey]||{};
+    const ids=Array.isArray(record.completed_task_ids)?record.completed_task_ids:[];
+    return (Array.isArray(template.tasks)?template.tasks:[]).map(x=>({title:x.title||"Task",detail:x.detail||"",complete:ids.includes(x.id)}));
   }
 
   async function refreshPublicSnapshot() {
