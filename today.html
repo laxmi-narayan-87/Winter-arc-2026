@@ -1,1 +1,36 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#f5ead8"><title>Today — Winter Arc 2026</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="app.css"></head><body><div class="app"><aside><a class="brand" href="index.html"><span class="brand-mark">❄</span><span class="brand-name">Winter<small>Arc 2026</small></span></a><nav class="nav"><a href="index.html"><span class="ico">⌂</span>Home</a><a href="today.html"><span class="ico">◷</span>Today</a><a href="timeline.html"><span class="ico">♧</span>Timeline</a><a href="projects.html"><span class="ico">⬡</span>Projects</a><a href="skills.html"><span class="ico">▥</span>Skills</a><a href="milestones.html"><span class="ico">⚑</span>Milestones</a><a href="learning.html"><span class="ico">▤</span>Learning</a><a href="stats.html"><span class="ico">↗</span>Stats</a><a href="about.html"><span class="ico">ⓘ</span>About</a></nav><div class="aside-quote">one day at a time</div><div class="privacy"><b>PRIVATE BY DEFAULT</b>Progress is yours. Share only what you choose.</div></aside><main><div class="topbar"><button class="pill" data-theme type="button">◐ theme</button><span class="pill">WINTER ARC · 2026</span></div><header class="page-head"><span class="eyebrow">TODAY · ONE DAY AT A TIME</span><h1>Today</h1><p class="lead">A small page for the things that deserve your attention today.</p></header><div class="grid two"><section class="card" id="day1-card"><span class="micro">TODAY</span><h2>Loading your progress…</h2><p>Sign in to load today’s plan and progress from Supabase.</p></section><section class="card"><span class="micro">Private note</span><h2>What matters today?</h2><p>Use this space as a quiet scratchpad. Nothing here is public.</p><textarea data-note="todayNote" placeholder="Write a thought, reminder, or intention..."></textarea><button class="button primary" type="button">Keep this note</button></section></div><footer class="footer"><span>WINTER ARC 2026</span><span>Build quietly. Keep going.</span></footer></main></div><script src="app.js"></script></body></html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#f5ead8"><title>Today — Winter Arc 2026</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="app.css"></head><body><div class="app"><aside><a class="brand" href="index.html"><span class="brand-mark">❄</span><span class="brand-name">Winter<small>Arc 2026</small></span></a><nav class="nav"><a href="index.html"><span class="ico">⌂</span>Home</a><a href="today.html"><span class="ico">◷</span>Today</a><a href="timeline.html"><span class="ico">♧</span>Timeline</a><a href="projects.html"><span class="ico">⬡</span>Projects</a><a href="skills.html"><span class="ico">▥</span>Skills</a><a href="milestones.html"><span class="ico">⚑</span>Milestones</a><a href="learning.html"><span class="ico">▤</span>Learning</a><a href="stats.html"><span class="ico">↗</span>Stats</a><a href="about.html"><span class="ico">ⓘ</span>About</a></nav><div class="aside-quote">one day at a time</div><div class="privacy"><b>PRIVATE BY DEFAULT</b>Progress is yours. Share only what you choose.</div></aside><main><div class="topbar"><button class="pill" data-theme type="button">◐ theme</button><span class="pill">WINTER ARC · 2026</span></div><header class="page-head"><span class="eyebrow">TODAY · ONE DAY AT A TIME</span><h1>Today</h1><p class="lead">A small page for the things that deserve your attention today.</p></header><div class="grid two"><section class="card" id="day1-card"><span class="micro">TODAY</span><h2>Loading your progress…</h2><p>Sign in to load today’s plan and progress from Supabase.</p></section><section class="card"><span class="micro">Private note</span><h2>What matters today?</h2><p>Use this space as a quiet scratchpad. Nothing here is public.</p><textarea id="today-note" data-note="todayNote" placeholder="Write a thought, reminder, or intention..."></textarea><button id="save-today-note" class="button primary" type="button">Keep this note</button><p id="today-note-msg" class="home-status" aria-live="polite"></p></section></div><footer class="footer"><span>WINTER ARC 2026</span><span>Build quietly. Keep going.</span></footer></main></div><script src="app.js"></script><script>
+(() => {
+  const note = document.getElementById("today-note");
+  const save = document.getElementById("save-today-note");
+  const msg = document.getElementById("today-note-msg");
+  if (!note || !save) return;
+  save.addEventListener("click", async () => {
+    const client = window.WINTER_ARC_APP?.getClient?.();
+    const user = window.WINTER_ARC_APP?.getUser?.();
+    if (!client || !user) {
+      msg.textContent = "Sign in first to save this private note.";
+      return;
+    }
+    const previous = save.textContent;
+    save.disabled = true;
+    save.textContent = "Saving…";
+    msg.textContent = "";
+    try {
+      const value = note.value.trim();
+      localStorage.setItem("winterArc:todayNote", value);
+      const { error } = await client.from("user_state").upsert(
+        { user_id: user.id, state_key: "todayNote", value },
+        { onConflict: "user_id,state_key" }
+      );
+      if (error) throw error;
+      await window.WINTER_ARC_APP?.refreshPublicSnapshot?.();
+      msg.textContent = "Private note saved.";
+    } catch (error) {
+      msg.textContent = error.message || "Could not save this note.";
+    } finally {
+      save.disabled = false;
+      save.textContent = previous;
+    }
+  });
+})();
+</script></body></html>
