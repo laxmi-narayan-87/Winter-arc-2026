@@ -34,9 +34,10 @@
 <script>
 (async()=>{
 const root=document.getElementById("controls"),preview=document.getElementById("preview"),state=document.getElementById("share-state");
-for(let i=0;i<100&&!window.WINTER_ARC_APP?.getClient();i++)await new Promise(r=>setTimeout(r,100));
 const app=window.WINTER_ARC_APP;
-if(!app?.getUser()){root.innerHTML='<h2>Sign in to share</h2><p>Your public profile is controlled from your private account. Sign in first, then choose what leaves the private dashboard.</p>';return;}
+if(!app){root.innerHTML='<h2>Loading private cloud…</h2><p>Preparing your secure sharing controls.</p>';return;}
+const ready=await app.ready();
+if(!ready.user){root.innerHTML='<h2>Sign in to share</h2><p>Your public profile is controlled from your private account. Sign in first, then choose what leaves the private dashboard.</p>';return;}
 const defaults={progress:true,streak:true,today_progress:true,daily_tasks:false,projects:false,skills:false,milestones:false,learning:false,timeline:false,fitness:false,notes:false};
 let share=await app.getPublicShare();let settings={...defaults,...(share?.settings||{})};
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -65,8 +66,28 @@ const selected=fields.filter(x=>on[x[0]]);if(selected.length)h+='<div class="pre
 h+='<div class="preview-section"><small style="font:14px var(--hand);color:var(--muted)">Private fields not selected here remain private.</small></div></div>';preview.innerHTML=h;
 }
 fields.forEach(x=>form?.elements[x[0]]?.addEventListener("change",renderPreview));form?.elements.enabled.addEventListener("change",renderPreview);form?.elements.displayName.addEventListener("input",renderPreview);form?.elements.slug.addEventListener("input",()=>{open.style.display="none";});
-copy.addEventListener("click",async()=>{await navigator.clipboard.writeText(url());msg.textContent="Public link copied.";});
-form.addEventListener("submit",async e=>{e.preventDefault();msg.textContent="Building your public snapshot…";const next={};Object.keys(defaults).forEach(k=>next[k]=form.elements[k].checked);try{const saved=await app.savePublicShare({shareSlug:form.slug.value.trim(),displayName:form.displayName.value.trim()||"Winter Arc 2026",enabled:form.elements.enabled.checked,settings:next});share=saved;open.href="today-public.html?profile="+encodeURIComponent(saved.share_slug);open.style.display="inline-flex";state.classList.toggle("live",saved.enabled);state.querySelector("span").textContent=saved.enabled?"Live public page":"Not published";msg.textContent=saved.enabled?"Published. Future private changes will refresh this snapshot automatically.":"Saved, but public sharing is off.";}catch(err){msg.textContent=err.message||"Could not save settings.";}});renderPreview();
+copy.addEventListener("click",async()=>{
+  const link=url();
+  try{
+    if(navigator.clipboard?.writeText) await navigator.clipboard.writeText(link);
+    else{const ta=document.createElement("textarea");ta.value=link;ta.style.position="fixed";ta.style.opacity="0";document.body.appendChild(ta);ta.select();document.execCommand("copy");ta.remove();}
+    msg.textContent="Public link copied.";msg.dataset.type="success";
+  }catch(err){msg.textContent="Copy blocked by the browser. Copy the URL from the field.";msg.dataset.type="error";}
+});
+form.addEventListener("submit",async e=>{
+  e.preventDefault();
+  const submit=form.querySelector('[type="submit"]');
+  const previous=submit.textContent;
+  const rawSlug=form.slug.value.trim().toLowerCase();
+  if(!/^[a-z0-9-]{3,80}$/.test(rawSlug)){msg.textContent="Use 3–80 lowercase letters, numbers, or hyphens.";msg.dataset.type="error";form.slug.focus();return;}
+  submit.disabled=true;copy.disabled=true;submit.textContent="Publishing…";msg.textContent="Building your public snapshot…";
+  const next={};Object.keys(defaults).forEach(k=>next[k]=form.elements[k].checked);
+  try{
+    const saved=await app.savePublicShare({shareSlug:rawSlug,displayName:form.displayName.value.trim()||"Winter Arc 2026",enabled:form.elements.enabled.checked,settings:next});
+    share=saved;open.href="today-public.html?profile="+encodeURIComponent(saved.share_slug);open.style.display="inline-flex";state.classList.toggle("live",saved.enabled);state.querySelector("span").textContent=saved.enabled?"Live public page":"Not published";msg.textContent=saved.enabled?"Published. Future private changes will refresh this snapshot automatically.":"Saved, but public sharing is off.";msg.dataset.type="success";
+  }catch(err){msg.textContent=err.message||"Could not save settings.";msg.dataset.type="error";}
+  finally{submit.disabled=false;copy.disabled=false;submit.textContent=previous;}
+});renderPreview();
 })();
 </script>
 </body></html>
