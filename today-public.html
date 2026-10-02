@@ -37,7 +37,7 @@ const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&g
 const slug=new URLSearchParams(location.search).get("profile");
 if(!slug){name.textContent="Winter Arc";content.innerHTML='<div class="empty-share">No public profile was specified.</div>';return;}
 try{
-if(!window.supabase)await new Promise((resolve,reject)=>{const x=document.createElement("script");x.src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";x.onload=resolve;x.onerror=reject;document.head.appendChild(x);});
+if(!window.supabase)await new Promise((resolve,reject)=>{const x=document.createElement("script");x.src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2";x.onload=resolve;x.onerror=reject;document.head.appendChild(x);});
 const client=window.supabase.createClient(WINTER_ARC_CONFIG.SUPABASE_URL,WINTER_ARC_CONFIG.SUPABASE_PUBLISHABLE_KEY);
 const {data,error}=await client.from("winter_arc_public_profiles").select("display_name,snapshot,updated_at").eq("share_slug",slug).maybeSingle();
 if(error)throw error;
