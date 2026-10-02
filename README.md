@@ -6,9 +6,13 @@ A private-first personal progress dashboard.
 
 - Frontend: static HTML/CSS/JS on GitHub Pages
 - Authentication: Supabase Auth
-- Database: Supabase Postgres
+- Source of truth: Supabase Postgres
 - Authorization: Postgres Row Level Security (RLS)
 - Local cache: browser localStorage
+- Structured private content: projects, skills, milestones, learning entries, timeline entries
+- Public sharing: explicit sanitized snapshot only
+
+GitHub contains application code and deployment assets, not personal progress records. Personal edits are persisted in Supabase and rendered by the GitHub Pages frontend.
 
 ## Supabase setup
 
@@ -26,7 +30,7 @@ The publishable key is designed for browser use. **Never put a secret/service-ro
 
 7. Open the deployed site and create/sign in to your account.
 
-Existing browser progress is migrated to the signed-in account the first time it connects.
+Existing browser progress is migrated to the signed-in account the first time it connects. Existing built-in project/skill/milestone/learning/timeline content is also migrated into the corresponding private tables once per account.
 
 ## Security
 
