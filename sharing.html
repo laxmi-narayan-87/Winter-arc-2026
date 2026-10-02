@@ -37,12 +37,13 @@ const root=document.getElementById("controls"),preview=document.getElementById("
 for(let i=0;i<100&&!window.WINTER_ARC_APP?.getClient();i++)await new Promise(r=>setTimeout(r,100));
 const app=window.WINTER_ARC_APP;
 if(!app?.getUser()){root.innerHTML='<h2>Sign in to share</h2><p>Your public profile is controlled from your private account. Sign in first, then choose what leaves the private dashboard.</p>';return;}
-const defaults={progress:true,streak:true,daily_tasks:false,projects:false,skills:false,milestones:false,learning:false,timeline:false,fitness:false,notes:false};
+const defaults={progress:true,streak:true,today_progress:true,daily_tasks:false,projects:false,skills:false,milestones:false,learning:false,timeline:false,fitness:false,notes:false};
 let share=await app.getPublicShare();let settings={...defaults,...(share?.settings||{})};
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const fields=[
 ["progress","Progress","Completion rate, completed days and tasks."],
 ["streak","Current streak","Your consecutive completed-day streak."],
+["today_progress","Today’s progress","Share only today’s completion status and task progress."],
 ["daily_tasks","Daily task details","Shows individual day tasks and whether they are complete."],
 ["projects","Projects","Your project cards, when your private data contains them."],
 ["skills","Skills","Selected skill progress from your private dashboard."],
@@ -55,7 +56,7 @@ const fields=[
 const slug=share?.share_slug||("winter-arc-"+Math.random().toString(36).slice(2,8));
 root.innerHTML='<div class="micro">PUBLISHING CONTROLS</div><h2>Decide what leaves your dashboard.</h2><p>Publishing creates a sanitized snapshot. The public page cannot edit your private data.</p><form id="form"><label class="row" style="padding:13px"><input type="checkbox" name="enabled" '+(share?.enabled?"checked":"")+'><span class="copy"><b class="share-title">Make my page public</b><small class="share-desc">Anyone with the link can view the sections you select below.</small></span></label><div style="margin:13px 0"><label>Public name<input name="displayName" maxlength="80" value="'+esc(share?.display_name||"Winter Arc 2026")+'"></label></div><div class="share-url"><input name="slug" pattern="[a-z0-9-]{3,80}" maxlength="80" value="'+esc(slug)+'" aria-label="Public URL slug"><button class="button" type="button" id="copy">Copy link</button></div><div class="list" style="margin-top:14px">'+fields.map(([k,t,d])=>'<label class="share-control"><span><b class="share-title">'+t+'</b><small class="share-desc">'+d+'</small></span><input class="share-toggle" type="checkbox" name="'+k+'" '+(settings[k]?"checked":"")+'></label>').join("")+'</div><div class="actions"><button class="button primary" type="submit">Save & publish</button><a class="button" id="open" href="#" target="_blank" rel="noopener" style="display:none">Open public page</a></div><p id="message" class="home-status"></p></form>';
 const form=root.querySelector("#form"),msg=root.querySelector("#message"),open=root.querySelector("#open"),copy=root.querySelector("#copy");
-function url(){return location.origin+location.pathname.replace("sharing.html","share.html")+"?profile="+encodeURIComponent(form.slug.value.trim());}
+function url(){return location.origin+location.pathname.replace("sharing.html","today-public.html")+"?profile="+encodeURIComponent(form.slug.value.trim());}
 function renderPreview(){
 const on={};Object.keys(defaults).forEach(k=>on[k]=form.elements[k].checked);
 const name=form.displayName.value.trim()||"Winter Arc 2026";let h='<div class="preview-top"><span class="micro">WINTER ARC · 2026</span><span class="micro">'+(form.enabled.checked?"PUBLIC":"PRIVATE")+'</span></div><div class="preview-body"><div class="preview-name">'+esc(name)+'</div>';
@@ -65,7 +66,7 @@ h+='<div class="preview-section"><small style="font:14px var(--hand);color:var(-
 }
 fields.forEach(x=>form?.elements[x[0]]?.addEventListener("change",renderPreview));form?.elements.enabled.addEventListener("change",renderPreview);form?.elements.displayName.addEventListener("input",renderPreview);form?.elements.slug.addEventListener("input",()=>{open.style.display="none";});
 copy.addEventListener("click",async()=>{await navigator.clipboard.writeText(url());msg.textContent="Public link copied.";});
-form.addEventListener("submit",async e=>{e.preventDefault();msg.textContent="Building your public snapshot…";const next={};Object.keys(defaults).forEach(k=>next[k]=form.elements[k].checked);try{const saved=await app.savePublicShare({shareSlug:form.slug.value.trim(),displayName:form.displayName.value.trim()||"Winter Arc 2026",enabled:form.elements.enabled.checked,settings:next});share=saved;open.href="share.html?profile="+encodeURIComponent(saved.share_slug);open.style.display="inline-flex";state.classList.toggle("live",saved.enabled);state.querySelector("span").textContent=saved.enabled?"Live public page":"Not published";msg.textContent=saved.enabled?"Published. Future private changes will refresh this snapshot automatically.":"Saved, but public sharing is off.";}catch(err){msg.textContent=err.message||"Could not save settings.";}});renderPreview();
+form.addEventListener("submit",async e=>{e.preventDefault();msg.textContent="Building your public snapshot…";const next={};Object.keys(defaults).forEach(k=>next[k]=form.elements[k].checked);try{const saved=await app.savePublicShare({shareSlug:form.slug.value.trim(),displayName:form.displayName.value.trim()||"Winter Arc 2026",enabled:form.elements.enabled.checked,settings:next});share=saved;open.href="today-public.html?profile="+encodeURIComponent(saved.share_slug);open.style.display="inline-flex";state.classList.toggle("live",saved.enabled);state.querySelector("span").textContent=saved.enabled?"Live public page":"Not published";msg.textContent=saved.enabled?"Published. Future private changes will refresh this snapshot automatically.":"Saved, but public sharing is off.";}catch(err){msg.textContent=err.message||"Could not save settings.";}});renderPreview();
 })();
 </script>
 </body></html>
