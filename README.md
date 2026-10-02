@@ -33,3 +33,20 @@ Existing browser progress is migrated to the signed-in account the first time it
 See `SECURITY.md`.
 
 The database is designed so authenticated users can access only their own rows. RLS is enabled and anonymous table privileges are revoked.
+
+## Public performance sharing
+
+Winter Arc has two distinct surfaces:
+
+- **Private dashboard** — authenticated users manage their own progress. Private `user_state` remains protected by RLS.
+- **Public performance page** — read-only, opt-in, and available through a share slug such as `share.html?profile=...`.
+
+Open **Share** from the private dashboard to:
+- enable or disable the public page;
+- choose a display name and share slug;
+- independently choose whether to publish overall progress, streak, daily task details, projects, skills, milestones, learning, timeline, fitness, or notes;
+- regenerate the public snapshot after private progress changes.
+
+The public page reads only the sanitized snapshot through `winter_arc_public_profiles`; it does not expose the user's private `user_state` table or account email. Public sharing is disabled until the owner explicitly enables it.
+
+Supabase uses RLS for the private share-management rows and a `security_invoker` view for the public read surface.
