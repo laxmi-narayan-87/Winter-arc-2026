@@ -1,17 +1,71 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Share Performance — Winter Arc 2026</title><link rel="stylesheet" href="app.css"></head><body><div class="app"><aside><a class="brand" href="index.html"><span class="brand-mark">❄</span><span class="brand-name">Winter<small>Arc 2026</small></span></a><nav class="nav"><a href="index.html">⌂ Home</a><a href="today.html">◷ Today</a><a href="timeline.html">♧ Timeline</a><a href="projects.html">⬡ Projects</a><a href="skills.html">▥ Skills</a><a href="milestones.html">⚑ Milestones</a><a href="learning.html">▤ Learning</a><a href="stats.html">↗ Stats</a><a href="sharing.html">↗ Share</a><a href="about.html">ⓘ About</a></nav><div class="aside-quote">private first</div><div class="privacy"><b>PUBLIC BY CHOICE</b>Choose exactly what your public page can show.</div></aside><main><div class="topbar"><button class="pill" data-theme type="button">◐ theme</button><span class="pill">SHARING</span></div><header class="page-head"><span class="eyebrow">PUBLIC PERFORMANCE</span><h1>Share your Winter Arc</h1><p class="lead">Your private dashboard stays editable. Your public page is read-only and contains only the sections you publish.</p></header><section class="card" id="sharing-card"><h2>Sign in to manage sharing</h2><p>Your public profile is optional. Nothing is published until you enable it.</p></section><footer class="footer"><span>WINTER ARC 2026</span><span>Share progress, not private data.</span></footer></main></div><script src="app.js"></script><script>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Share — Winter Arc 2026</title><link rel="stylesheet" href="app.css">
+<style>
+.share-layout{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(320px,.85fr);gap:16px;align-items:start}
+.share-hero{display:flex;justify-content:space-between;gap:15px;align-items:end}
+.share-state{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;border:1px solid var(--line);border-radius:20px;font:11px var(--mono);color:var(--muted);background:var(--cream)}
+.share-state i{width:7px;height:7px;border-radius:50%;background:#a9a39a}.share-state.live i{background:#1b9b77}
+.share-control{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 0;border-bottom:1px solid #eadfce}
+.share-control:last-child{border-bottom:0}.share-control input[type=checkbox]{width:19px;height:19px;accent-color:var(--navy)}
+.share-title{font:22px/.9 var(--hand);color:var(--navy)}.share-desc{font:14px/1.1 var(--hand);color:var(--muted);margin-top:4px}
+.share-toggle{flex:none}.share-url{display:flex;gap:8px}.share-url input{min-width:0}.share-url button{flex:none}
+.preview-shell{position:sticky;top:15px}.preview{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff9ef}.preview-top{padding:15px 17px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:10px}.preview-body{padding:16px}.preview-name{font:32px/.9 var(--hand);color:var(--navy);margin:3px 0 13px}.preview-metrics{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.preview-metric{border:1px solid var(--line);border-radius:10px;padding:11px}.preview-metric b{display:block;font:25px var(--hand);color:var(--navy)}.preview-metric span{font:9px var(--mono);color:var(--muted);text-transform:uppercase}.preview-line{height:7px;background:#e7dfd2;border-radius:7px;overflow:hidden;margin-top:9px}.preview-line i{display:block;height:100%;background:var(--navy);border-radius:inherit}.preview-section{margin-top:13px;padding-top:11px;border-top:1px dashed var(--line)}.preview-section h4{font:10px var(--mono);letter-spacing:.08em;color:var(--terracotta);margin:0 0 6px}.preview-chip{display:inline-block;padding:5px 8px;border-radius:12px;background:#e9eee3;font:13px var(--hand);margin:2px}
+@media(max-width:900px){.share-layout{grid-template-columns:1fr}.preview-shell{position:static}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside><a class="brand" href="index.html"><span class="brand-mark">❄</span><span class="brand-name">Winter<small>Arc 2026</small></span></a>
+<nav class="nav"><a href="index.html">⌂ Home</a><a href="today.html">◷ Today</a><a href="timeline.html">♧ Timeline</a><a href="projects.html">⬡ Projects</a><a href="skills.html">▥ Skills</a><a href="milestones.html">⚑ Milestones</a><a href="learning.html">▤ Learning</a><a href="stats.html">↗ Stats</a><a href="sharing.html">↗ Share</a><a href="about.html">ⓘ About</a></nav>
+<div class="aside-quote">show the journey, keep the private parts private</div><div class="privacy"><b>PUBLIC BY CHOICE</b>Private data never becomes public just because you turn sharing on.</div></aside>
+<main>
+<div class="topbar"><button class="pill" data-theme type="button">◐ theme</button><span class="pill">SHARE CONTROL</span></div>
+<header class="page-head share-hero"><div><span class="eyebrow">YOUR PUBLIC PROFILE</span><h1>Share selectively.</h1><p class="lead">Build a public version of your Winter Arc without giving up control of the private one.</p></div><span id="share-state" class="share-state"><i></i><span>Not published</span></span></header>
+<div class="share-layout">
+<section class="card" id="controls"><div class="home-loading">Checking your private account…</div></section>
+<section class="preview-shell"><div class="card"><span class="micro">LIVE PREVIEW</span><h2 style="margin-top:5px">What others will see</h2><div id="preview" class="preview"><div class="preview-body">Choose what to share.</div></div></div></section>
+</div>
+<footer class="footer"><span>WINTER ARC 2026</span><span>Public snapshot · Private control</span></footer>
+</main></div>
+<script src="app.js"></script>
+<script>
 (async()=>{
-const root=document.getElementById("sharing-card");
+const root=document.getElementById("controls"),preview=document.getElementById("preview"),state=document.getElementById("share-state");
 for(let i=0;i<100&&!window.WINTER_ARC_APP?.getClient();i++)await new Promise(r=>setTimeout(r,100));
 const app=window.WINTER_ARC_APP;
-if(!app?.getUser()){root.innerHTML="<h2>Sign in first</h2><p>Use the account button in the header, then return here.</p>";return;}
-const defaults={progress:true,streak:true,daily_tasks:false,projects:true,skills:true,milestones:true,learning:true,timeline:true,fitness:false,notes:false};
-const share=await app.getPublicShare();const settings={...defaults,...(share?.settings||{})};
+if(!app?.getUser()){root.innerHTML='<h2>Sign in to share</h2><p>Your public profile is controlled from your private account. Sign in first, then choose what leaves the private dashboard.</p>';return;}
+const defaults={progress:true,streak:true,daily_tasks:false,projects:false,skills:false,milestones:false,learning:false,timeline:false,fitness:false,notes:false};
+let share=await app.getPublicShare();let settings={...defaults,...(share?.settings||{})};
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const slug=share?.share_slug||("winter-arc-2026-"+Math.random().toString(36).slice(2,8));
-const fields=[["progress","Overall progress","Days and task completion totals"],["streak","Current streak","Consecutive completed days"],["daily_tasks","Daily task details","Individual tasks and completion status"],["projects","Projects","Published project entries, when available"],["skills","Skills","Published skill entries, when available"],["milestones","Milestones","Published milestones, when available"],["learning","Learning","Published learning entries, when available"],["timeline","Timeline","Published timeline entries, when available"],["fitness","Fitness","Fitness metrics"],["notes","Personal notes","Off by default; only enable deliberately"]];
-root.innerHTML='<div class="micro">CONTROL PANEL</div><h2>Public profile settings</h2><p>Nothing is public until you enable publishing. You can disable the link later.</p><form id="share-form"><label class="row"><input type="checkbox" name="enabled" '+(share?.enabled?"checked":"")+'><span class="copy"><b>Publish public page</b><small>Anyone with the link can view selected information.</small></span></label><label>Display name<input name="displayName" maxlength="80" value="'+esc(share?.display_name||"Winter Arc 2026")+'"></label><label>Share URL slug<input name="slug" pattern="[a-z0-9-]{3,80}" maxlength="80" value="'+esc(slug)+'"><small>Lowercase letters, numbers and hyphens only.</small></label><div class="list">'+fields.map(([k,t,d])=>'<label class="row"><input type="checkbox" name="'+k+'" '+(settings[k]?"checked":"")+'><span class="copy"><b>'+t+'</b><small>'+d+'</small></span></label>').join("")+'</div><button class="button primary" type="submit">Save sharing settings</button> <a class="button" id="view-link" href="#" target="_blank" rel="noopener" style="display:none">Open public page</a><p id="share-message" class="home-status"></p></form>';
-const form=root.querySelector("#share-form"),msg=root.querySelector("#share-message"),link=root.querySelector("#view-link");
-const showLink=s=>{link.href="share.html?profile="+encodeURIComponent(s);link.style.display="inline-flex";};
-if(share?.share_slug)showLink(share.share_slug);
-form.addEventListener("submit",async e=>{e.preventDefault();msg.textContent="Saving…";const next={};Object.keys(defaults).forEach(k=>next[k]=form.elements[k].checked);try{const saved=await app.savePublicShare({shareSlug:form.slug.value.trim(),displayName:form.displayName.value.trim()||"Winter Arc 2026",enabled:form.enabled.checked,settings:next});showLink(saved.share_slug);msg.textContent=saved.enabled?"Public page is live.":"Saved privately; public page is disabled.";}catch(err){msg.textContent=err.message||"Could not save settings.";}});})();
-</script></body></html>
+const fields=[
+["progress","Progress","Completion rate, completed days and tasks."],
+["streak","Current streak","Your consecutive completed-day streak."],
+["daily_tasks","Daily task details","Shows individual day tasks and whether they are complete."],
+["projects","Projects","Your project cards, when your private data contains them."],
+["skills","Skills","Selected skill progress from your private dashboard."],
+["milestones","Milestones","Milestones you have recorded."],
+["learning","Learning","Learning activity you have recorded."],
+["timeline","Timeline","Your season timeline entries."],
+["fitness","Fitness","Fitness information stored in your private state."],
+["notes","Personal notes","Private notes. Keep this off unless you intentionally want them public."]
+];
+const slug=share?.share_slug||("winter-arc-"+Math.random().toString(36).slice(2,8));
+root.innerHTML='<div class="micro">PUBLISHING CONTROLS</div><h2>Decide what leaves your dashboard.</h2><p>Publishing creates a sanitized snapshot. The public page cannot edit your private data.</p><form id="form"><label class="row" style="padding:13px"><input type="checkbox" name="enabled" '+(share?.enabled?"checked":"")+'><span class="copy"><b class="share-title">Make my page public</b><small class="share-desc">Anyone with the link can view the sections you select below.</small></span></label><div style="margin:13px 0"><label>Public name<input name="displayName" maxlength="80" value="'+esc(share?.display_name||"Winter Arc 2026")+'"></label></div><div class="share-url"><input name="slug" pattern="[a-z0-9-]{3,80}" maxlength="80" value="'+esc(slug)+'" aria-label="Public URL slug"><button class="button" type="button" id="copy">Copy link</button></div><div class="list" style="margin-top:14px">'+fields.map(([k,t,d])=>'<label class="share-control"><span><b class="share-title">'+t+'</b><small class="share-desc">'+d+'</small></span><input class="share-toggle" type="checkbox" name="'+k+'" '+(settings[k]?"checked":"")+'></label>').join("")+'</div><div class="actions"><button class="button primary" type="submit">Save & publish</button><a class="button" id="open" href="#" target="_blank" rel="noopener" style="display:none">Open public page</a></div><p id="message" class="home-status"></p></form>';
+const form=root.querySelector("#form"),msg=root.querySelector("#message"),open=root.querySelector("#open"),copy=root.querySelector("#copy");
+function url(){return location.origin+location.pathname.replace("sharing.html","share.html")+"?profile="+encodeURIComponent(form.slug.value.trim());}
+function renderPreview(){
+const on={};Object.keys(defaults).forEach(k=>on[k]=form.elements[k].checked);
+const name=form.displayName.value.trim()||"Winter Arc 2026";let h='<div class="preview-top"><span class="micro">WINTER ARC · 2026</span><span class="micro">'+(form.enabled.checked?"PUBLIC":"PRIVATE")+'</span></div><div class="preview-body"><div class="preview-name">'+esc(name)+'</div>';
+if(on.progress||on.streak){h+='<div class="preview-metrics">'+(on.progress?'<div class="preview-metric"><b>—%</b><span>completion</span></div><div class="preview-metric"><b>—/—</b><span>days</span></div>':"")+(on.streak?'<div class="preview-metric"><b>—</b><span>streak</span></div>':"")+'</div>';}
+const selected=fields.filter(x=>on[x[0]]);if(selected.length)h+='<div class="preview-section"><h4>VISIBLE SECTIONS</h4>'+selected.map(x=>'<span class="preview-chip">'+x[1]+'</span>').join("")+'</div>';
+h+='<div class="preview-section"><small style="font:14px var(--hand);color:var(--muted)">Private fields not selected here remain private.</small></div></div>';preview.innerHTML=h;
+}
+fields.forEach(x=>form?.elements[x[0]]?.addEventListener("change",renderPreview));form?.elements.enabled.addEventListener("change",renderPreview);form?.elements.displayName.addEventListener("input",renderPreview);form?.elements.slug.addEventListener("input",()=>{open.style.display="none";});
+copy.addEventListener("click",async()=>{await navigator.clipboard.writeText(url());msg.textContent="Public link copied.";});
+form.addEventListener("submit",async e=>{e.preventDefault();msg.textContent="Building your public snapshot…";const next={};Object.keys(defaults).forEach(k=>next[k]=form.elements[k].checked);try{const saved=await app.savePublicShare({shareSlug:form.slug.value.trim(),displayName:form.displayName.value.trim()||"Winter Arc 2026",enabled:form.elements.enabled.checked,settings:next});share=saved;open.href="share.html?profile="+encodeURIComponent(saved.share_slug);open.style.display="inline-flex";state.classList.toggle("live",saved.enabled);state.querySelector("span").textContent=saved.enabled?"Live public page":"Not published";msg.textContent=saved.enabled?"Published. Future private changes will refresh this snapshot automatically.":"Saved, but public sharing is off.";}catch(err){msg.textContent=err.message||"Could not save settings.";}});renderPreview();
+})();
+</script>
+</body></html>
