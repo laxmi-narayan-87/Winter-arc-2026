@@ -452,6 +452,62 @@
     }
   }
 
+  async function getPublicShare() {
+    if (!supabase || !currentUser) return null;
+    const { data, error } = await supabase.from("public_shares").select("*").eq("user_id", currentUser.id).maybeSingle();
+    if (error) throw error;
+    return data;
+  }
+
+  async function buildPublicSnapshot(settings) {
+    if (!supabase || !currentUser) throw new Error("Sign in first.");
+    const safe = { ...(settings || {}) };
+    const { data: rows, error } = await supabase.from("user_state").select("state_key,value").eq("user_id", currentUser.id);
+    if (error) throw error;
+    const state = Object.fromEntries((rows || []).map(r => [r.state_key, r.value]));
+    const { data: templates, error: te } = await supabase.from("day_templates").select("day_number,day_date,title,tasks").order("day_number");
+    if (te) throw te;
+    const days = (templates || []).map(t => {
+      const record = state["day:" + t.day_date] || {};
+      const ids = Array.isArray(record.completed_task_ids) ? record.completed_task_ids : [];
+      const tasks = Array.isArray(t.tasks) ? t.tasks : [];
+      return { day:t.day_number, date:t.day_date, title:t.title, completed:ids.length, total:tasks.length,
+        complete:tasks.length > 0 && ids.length >= tasks.length,
+        ...(safe.daily_tasks ? {tasks:tasks.map(x=>({title:x.title||"Task",detail:x.detail||"",complete:ids.includes(x.id)}))} : {}) };
+    });
+    const completedDays=days.filter(d=>d.complete).length;
+    const totalTasks=days.reduce((n,d)=>n+d.total,0);
+    const completedTasks=days.reduce((n,d)=>n+d.completed,0);
+    let streak=0;
+    for(let i=days.length-1;i>=0;i--){if(!days[i].complete)break;streak++;}
+    return {
+      version:1, generated_at:new Date().toISOString(),
+      ...(safe.progress?{progress:{days_completed:completedDays,days_total:days.length,tasks_completed:completedTasks,tasks_total:totalTasks,completion_rate:totalTasks?Math.round(completedTasks/totalTasks*100):0}}:{}),
+      ...(safe.streak?{streak:{current:streak}}:{}),
+      ...(safe.daily_tasks?{days}:{}),
+      ...(safe.notes && typeof state.todayNote==="string"?{note:state.todayNote}:{}),
+      ...(safe.projects?{projects:Array.isArray(state.projects)?state.projects:[]}:{}),
+      ...(safe.skills?{skills:Array.isArray(state.skills)?state.skills:[]}:{}),
+      ...(safe.milestones?{milestones:Array.isArray(state.milestones)?state.milestones:[]}:{}),
+      ...(safe.learning?{learning:Array.isArray(state.learning)?state.learning:[]}:{}),
+      ...(safe.timeline?{timeline:Array.isArray(state.timeline)?state.timeline:[]}:{}),
+      ...(safe.fitness?{fitness:state.fitness||{}}:{})
+    };
+  }
+
+  async function savePublicShare({shareSlug,displayName,enabled,settings}) {
+    if(!supabase || !currentUser) throw new Error("Sign in first.");
+    const snapshot=await buildPublicSnapshot(settings);
+    const {data,error}=await supabase.from("public_shares").upsert(
+      {user_id:currentUser.id,share_slug:shareSlug,display_name:displayName||"Winter Arc 2026",enabled:Boolean(enabled),settings:settings||{},snapshot},
+      {onConflict:"user_id"}
+    ).select().single();
+    if(error) throw error;
+    return data;
+  }
+
+  window.WINTER_ARC_APP={getClient:()=>supabase,getUser:()=>currentUser,getPublicShare,buildPublicSnapshot,savePublicShare};
+
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", boot, { once: true });
   } else {
