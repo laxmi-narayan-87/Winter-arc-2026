@@ -97,3 +97,48 @@ set day_date = excluded.day_date,
     title = excluded.title,
     tasks = excluded.tasks,
     updated_at = now();
+
+-- Public sharing is opt-in. The snapshot contains only fields the owner explicitly publishes.
+create table if not exists public.public_shares (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  share_slug text not null unique check (share_slug ~ '^[a-z0-9-]{3,80}$'),
+  display_name text not null default 'Winter Arc 2026',
+  enabled boolean not null default false,
+  settings jsonb not null default '{"progress":true,"streak":true,"daily_tasks":false,"projects":true,"skills":true,"milestones":true,"learning":true,"timeline":true,"fitness":false,"notes":false}'::jsonb,
+  snapshot jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create or replace function public.set_public_share_updated_at()
+returns trigger language plpgsql set search_path = public as $$
+begin new.updated_at = now(); return new; end;
+$$;
+
+drop trigger if exists public_shares_updated_at on public.public_shares;
+create trigger public_shares_updated_at before update on public.public_shares
+for each row execute function public.set_public_share_updated_at();
+
+alter table public.public_shares enable row level security;
+revoke all on table public.public_shares from anon, authenticated;
+grant select, insert, update, delete on table public.public_shares to authenticated;
+grant select on table public.public_shares to anon;
+
+drop policy if exists "owners can read their public share" on public.public_shares;
+create policy "owners can read their public share" on public.public_shares for select to authenticated using ((select auth.uid()) = user_id);
+drop policy if exists "owners can create their public share" on public.public_shares;
+create policy "owners can create their public share" on public.public_shares for insert to authenticated with check ((select auth.uid()) = user_id);
+drop policy if exists "owners can update their public share" on public.public_shares;
+create policy "owners can update their public share" on public.public_shares for update to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+drop policy if exists "owners can delete their public share" on public.public_shares;
+create policy "owners can delete their public share" on public.public_shares for delete to authenticated using ((select auth.uid()) = user_id);
+drop policy if exists "anyone can read enabled public shares" on public.public_shares;
+create policy "anyone can read enabled public shares" on public.public_shares for select to anon using (enabled = true);
+
+create or replace view public.winter_arc_public_profiles
+with (security_invoker = true)
+as select share_slug, display_name, snapshot, updated_at
+from public.public_shares where enabled = true;
+
+revoke all on public.winter_arc_public_profiles from anon, authenticated;
+grant select on public.winter_arc_public_profiles to anon, authenticated;
