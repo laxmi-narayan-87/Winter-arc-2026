@@ -299,53 +299,6 @@ on public.public_share_profiles for select to anon, authenticated using (true);
 revoke all on table public.public_shares from anon;
 grant select, insert, update, delete on table public.public_shares to authenticated;
 
-create or replace function public.publish_public_share(
-  p_share_slug text, p_display_name text, p_enabled boolean, p_settings jsonb, p_snapshot jsonb
-)
-returns public.public_shares
-language plpgsql security definer set search_path = ''
-as $$
-declare result public.public_shares;
-begin
-  if (select auth.uid()) is null then raise exception 'Authentication required'; end if;
-  if p_share_slug !~ '^[a-z0-9-]{3,80}$' then raise exception 'Invalid share slug'; end if;
-  insert into public.public_shares(user_id,share_slug,display_name,enabled,settings,snapshot)
-  values ((select auth.uid()),p_share_slug,coalesce(nullif(p_display_name,''),'Winter Arc 2026'),coalesce(p_enabled,false),coalesce(p_settings,'{}'::jsonb),coalesce(p_snapshot,'{}'::jsonb))
-  on conflict (user_id) do update set share_slug=excluded.share_slug,display_name=excluded.display_name,enabled=excluded.enabled,settings=excluded.settings,snapshot=excluded.snapshot
-  returning * into result;
-  if result.enabled then
-    insert into public.public_share_profiles(share_slug,display_name,snapshot,updated_at)
-    values(result.share_slug,result.display_name,result.snapshot,now())
-    on conflict (share_slug) do update set display_name=excluded.display_name,snapshot=excluded.snapshot,updated_at=now();
-  else
-    delete from public.public_share_profiles where share_slug=result.share_slug;
-  end if;
-  return result;
-end;
-$$;
-revoke execute on function public.publish_public_share(text,text,boolean,jsonb,jsonb) from public, anon;
-grant execute on function public.publish_public_share(text,text,boolean,jsonb,jsonb) to authenticated;
-
-create or replace function public.sync_public_share_snapshot(p_snapshot jsonb)
-returns public.public_shares
-language plpgsql security definer set search_path = ''
-as $$
-declare result public.public_shares;
-begin
-  if (select auth.uid()) is null then raise exception 'Authentication required'; end if;
-  update public.public_shares set snapshot=coalesce(p_snapshot,'{}'::jsonb)
-  where user_id=(select auth.uid()) and enabled=true
-  returning * into result;
-  if not found then return null; end if;
-  insert into public.public_share_profiles(share_slug,display_name,snapshot,updated_at)
-  values(result.share_slug,result.display_name,result.snapshot,now())
-  on conflict (share_slug) do update set display_name=excluded.display_name,snapshot=excluded.snapshot,updated_at=now();
-  return result;
-end;
-$$;
-revoke execute on function public.sync_public_share_snapshot(jsonb) from public, anon;
-grant execute on function public.sync_public_share_snapshot(jsonb) to authenticated;
-
 drop view if exists public.winter_arc_public_profiles;
 create view public.winter_arc_public_profiles with (security_invoker = true)
 as select share_slug,display_name,snapshot,updated_at from public.public_share_profiles;
