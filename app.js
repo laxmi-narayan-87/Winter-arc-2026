@@ -98,7 +98,7 @@
       localRows.push({
         user_id: currentUser.id,
         state_key: stateKey,
-        value: JSON.stringify(raw)
+        value: (() => { try { return JSON.parse(raw); } catch (_) { return String(raw); } })()
       });
     }
 
