@@ -664,7 +664,7 @@
     return data;
   }
 
-  window.WINTER_ARC_APP={getClient:()=>supabase,getUser:()=>currentUser,getPublicShare,buildPublicSnapshot,savePublicShare,getStructuredRows,insertStructuredRow,updateStructuredRow,deleteStructuredRow};
+  window.WINTER_ARC_APP={getClient:()=>supabase,getUser:()=>currentUser,getPublicShare,buildPublicSnapshot,savePublicShare,getStructuredRows,insertStructuredRow,updateStructuredRow,deleteStructuredRow,refreshPublicSnapshot};
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", boot, { once: true });
