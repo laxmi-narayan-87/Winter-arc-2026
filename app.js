@@ -589,7 +589,8 @@
       const { data: share, error } = await supabase.from("public_shares").select("enabled,settings,share_slug,display_name").eq("user_id", currentUser.id).maybeSingle();
       if (error || !share?.enabled) return;
       const snapshot = await buildPublicSnapshot(share.settings || {});
-      await supabase.from("public_shares").update({ snapshot }).eq("user_id", currentUser.id);
+      const { error: syncError } = await supabase.rpc("sync_public_share_snapshot",{p_snapshot:snapshot});
+      if (syncError) throw syncError;
     } catch (error) {
       console.warn("Could not refresh public snapshot:", error.message);
     }
@@ -598,10 +599,13 @@
   async function savePublicShare({shareSlug,displayName,enabled,settings}) {
     if(!supabase || !currentUser) throw new Error("Sign in first.");
     const snapshot=await buildPublicSnapshot(settings);
-    const {data,error}=await supabase.from("public_shares").upsert(
-      {user_id:currentUser.id,share_slug:shareSlug,display_name:displayName||"Winter Arc 2026",enabled:Boolean(enabled),settings:settings||{},snapshot},
-      {onConflict:"user_id"}
-    ).select().single();
+    const {data,error}=await supabase.rpc("publish_public_share",{
+      p_share_slug:shareSlug,
+      p_display_name:displayName||"Winter Arc 2026",
+      p_enabled:Boolean(enabled),
+      p_settings:settings||{},
+      p_snapshot:snapshot
+    });
     if(error) throw error;
     return data;
   }
