@@ -18,6 +18,8 @@
   let supabase = null;
   let currentUser = null;
   let cloudReady = false;
+  let cloudInitPromise = null;
+  let authBusy = false;
   let day1Template = null;
   let day1Record = null;
   const pendingWrites = new Map();
@@ -303,44 +305,114 @@
     });
   }
 
+  function renderAuthState() {
+    const button = document.querySelector("#winter-auth button");
+    const status = document.getElementById("auth-status");
+    const label = currentUser
+      ? "↪ " + (currentUser.email || "account")
+      : hasConfig()
+        ? "Sign in"
+        : "Cloud setup";
+    if (button && !authBusy) {
+      button.disabled = false;
+      button.textContent = label;
+    }
+    if (status) status.textContent = currentUser ? (currentUser.email || "Signed in") : (hasConfig() ? "Sign in" : "Cloud unavailable");
+  }
+
+  function setAuthMessage(modal, text, type = "info") {
+    const message = modal?.querySelector("#winter-auth-message");
+    if (!message) return;
+    message.textContent = text || "";
+    message.dataset.type = type;
+  }
+
+  function closeAuthModal(modal) {
+    if (!modal) return;
+    modal.classList.remove("is-open");
+    window.setTimeout(() => { modal.hidden = true; }, 180);
+  }
+
+  function openExistingAuthModal(modal) {
+    modal.hidden = false;
+    requestAnimationFrame(() => modal.classList.add("is-open"));
+    modal.querySelector('input[name="email"]')?.focus();
+  }
+
+  function setAuthMode(modal, mode) {
+    const submit = modal.querySelector("[data-auth-submit]");
+    const toggle = modal.querySelector("[data-signup]");
+    const title = modal.querySelector("#winter-auth-mode-title");
+    const hint = modal.querySelector("#winter-auth-mode-hint");
+    const note = modal.querySelector("[data-mode-hint]");
+    const signup = mode === "signup";
+    if (title) title.textContent = signup ? "Create your private space" : "Welcome back";
+    if (hint) hint.textContent = signup ? "Create an account to keep your Winter Arc synced across devices." : "Sign in to sync your progress across devices.";
+    if (submit) {
+      submit.dataset.mode = mode;
+      submit.textContent = signup ? "Create account" : "Sign in";
+    }
+    if (toggle) toggle.textContent = signup ? "Back to sign in" : "Create account";
+    if (note) note.textContent = signup ? "Use a password with at least 8 characters." : "Your private progress stays in your Supabase account.";
+  }
+
+  async function finishAuth(user, modal, successMessage) {
+    currentUser = user;
+    setAuthMessage(modal, successMessage, "success");
+    authBusy = true;
+    const submit = modal.querySelector("[data-auth-submit]");
+    const toggle = modal.querySelector("[data-signup]");
+    if (submit) { submit.disabled = true; submit.textContent = "Syncing…"; }
+    if (toggle) toggle.disabled = true;
+    try {
+      await pullCloudState();
+      await migrateStructuredContent();
+      await loadDay1FromCloud();
+      renderAuthState();
+      closeAuthModal(modal);
+    } finally {
+      authBusy = false;
+      if (submit) submit.disabled = false;
+      if (toggle) toggle.disabled = false;
+    }
+  }
+
   function addAuthUI() {
     const topbar = document.querySelector(".topbar");
     if (!topbar || document.getElementById("winter-auth")) return;
 
     const wrap = document.createElement("div");
     wrap.id = "winter-auth";
-    wrap.style.display = "flex";
-    wrap.style.gap = "8px";
-    wrap.style.alignItems = "center";
-
     const button = document.createElement("button");
     button.className = "pill";
     button.type = "button";
+    button.setAttribute("aria-haspopup", "dialog");
+    button.setAttribute("aria-controls", "winter-auth-modal");
     button.addEventListener("click", async () => {
+      if (authBusy) return;
       if (currentUser) {
-        await supabase.auth.signOut();
+        authBusy = true;
+        button.disabled = true;
+        button.textContent = "Signing out…";
+        const { error } = await supabase.auth.signOut();
+        if (error) {
+          authBusy = false;
+          renderAuthState();
+          return;
+        }
         currentUser = null;
         clearLocalUserState();
         applyStateToPage();
+        authBusy = false;
         renderAuthState();
-      } else {
-        showAuthModal();
+        return;
       }
+      await initCloud();
+      showAuthModal();
     });
-
     wrap.appendChild(button);
     topbar.prepend(wrap);
     renderAuthState();
-  }
-
-  function renderAuthState() {
-    const button = document.querySelector("#winter-auth button");
-    if (!button) return;
-    button.textContent = currentUser
-      ? "↪ " + (currentUser.email || "account")
-      : hasConfig()
-        ? "Sign in"
-        : "Cloud setup";
   }
 
   function showAuthModal() {
@@ -350,80 +422,88 @@
     }
     let modal = document.getElementById("winter-auth-modal");
     if (modal) {
-      modal.hidden = false;
+      openExistingAuthModal(modal);
       return;
     }
 
     modal = document.createElement("div");
     modal.id = "winter-auth-modal";
-    modal.style.cssText = "position:fixed;inset:0;z-index:9999;background:#102e5866;display:grid;place-items:center;padding:20px;";
-    modal.innerHTML = `
-      <div role="dialog" aria-modal="true" style="width:min(420px,100%);background:#fff9ed;border:1px solid #dec8a8;border-radius:16px;padding:22px;box-shadow:0 20px 60px #102e5840;">
-        <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;">
-          <div>
-            <div style="font:11px var(--mono);color:var(--terracotta);letter-spacing:.1em;">PRIVATE CLOUD</div>
-            <h2 style="font:34px var(--hand);color:var(--navy);margin:5px 0;">Your Winter Arc</h2>
-          </div>
-          <button type="button" data-close style="border:0;background:none;font-size:22px;">×</button>
-        </div>
-        <p style="font:17px var(--hand);color:var(--muted);">Sign in to sync your progress across devices.</p>
-        <form id="winter-auth-form">
-          <input required type="email" autocomplete="email" placeholder="Email" name="email">
-          <input required type="password" minlength="8" autocomplete="current-password" placeholder="Password (8+ characters)" name="password">
-          <button class="button primary" type="submit">Sign in</button>
-          <button class="button" type="button" data-signup>Create account</button>
-          <small id="winter-auth-message" style="font:13px var(--hand);color:var(--muted);"></small>
-        </form>
-      </div>`;
+    modal.hidden = true;
+    modal.innerHTML = '<div class="auth-backdrop" data-auth-backdrop></div>' +
+      '<div class="auth-dialog" role="dialog" aria-modal="true" aria-labelledby="winter-auth-mode-title">' +
+        '<div class="auth-dialog-head">' +
+          '<div><div class="micro">PRIVATE CLOUD</div><h2 id="winter-auth-mode-title">Welcome back</h2><p id="winter-auth-mode-hint">Sign in to sync your progress across devices.</p></div>' +
+          '<button class="auth-close" type="button" data-close aria-label="Close">×</button>' +
+        '</div>' +
+        '<form id="winter-auth-form" novalidate>' +
+          '<label>Email<input required type="email" autocomplete="email" placeholder="you@example.com" name="email"></label>' +
+          '<label>Password<input required type="password" minlength="8" autocomplete="current-password" placeholder="8+ characters" name="password"></label>' +
+          '<div class="auth-inline" data-mode-hint>Your private progress stays in your Supabase account.</div>' +
+          '<button class="button primary auth-submit" type="submit" data-auth-submit data-mode="signin">Sign in</button>' +
+          '<button class="button auth-alt" type="button" data-signup>Create account</button>' +
+          '<p id="winter-auth-message" class="auth-message" aria-live="polite"></p>' +
+        '</form>' +
+      '</div>';
     document.body.appendChild(modal);
 
-    modal.querySelector("[data-close]").addEventListener("click", () => (modal.hidden = true));
-    modal.addEventListener("click", (e) => { if (e.target === modal) modal.hidden = true; });
+    const form = modal.querySelector("#winter-auth-form");
+    const close = () => { if (!authBusy) closeAuthModal(modal); };
+    modal.querySelector("[data-close]").addEventListener("click", close);
+    modal.querySelector("[data-auth-backdrop]").addEventListener("click", close);
+    setAuthMode(modal, "signin");
 
-    const form = modal.querySelector("form");
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
+      if (authBusy || !form.reportValidity()) return;
+      const submit = form.querySelector("[data-auth-submit]");
+      const toggle = form.querySelector("[data-signup]");
       const email = form.email.value.trim();
       const password = form.password.value;
-      const message = modal.querySelector("#winter-auth-message");
-      message.textContent = "Signing in…";
-
-      const previousUserId = currentUser?.id || null;
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        message.textContent = error.message;
-        return;
-      }
-      currentUser = data.user;
-      if (previousUserId && previousUserId !== currentUser.id) clearLocalUserState();
-      await pullCloudState();
-      modal.hidden = true;
-      renderAuthState();
-    });
-
-    modal.querySelector("[data-signup]").addEventListener("click", async () => {
-      const email = form.email.value.trim();
-      const password = form.password.value;
-      const message = modal.querySelector("#winter-auth-message");
-      if (!email || password.length < 8) {
-        message.textContent = "Enter an email and a password with at least 8 characters.";
-        return;
-      }
-      message.textContent = "Creating account…";
-      const { data, error } = await supabase.auth.signUp({ email, password });
-      if (error) {
-        message.textContent = error.message;
-        return;
-      }
-      if (data.user && data.session) {
-        currentUser = data.user;
-        await pullCloudState();
-        modal.hidden = true;
+      const mode = submit.dataset.mode || "signin";
+      authBusy = true;
+      submit.disabled = true;
+      toggle.disabled = true;
+      submit.textContent = mode === "signup" ? "Creating account…" : "Signing in…";
+      setAuthMessage(modal, mode === "signup" ? "Creating your private space…" : "Checking your credentials…", "loading");
+      try {
+        if (mode === "signup") {
+          const { data, error } = await supabase.auth.signUp({ email, password });
+          if (error) throw error;
+          if (data.user && data.session) {
+            await finishAuth(data.user, modal, "Account created. Syncing your Winter Arc…");
+          } else {
+            authBusy = false;
+            submit.disabled = false;
+            toggle.disabled = false;
+            setAuthMessage(modal, "Account created. Check your email for confirmation, then sign in.", "success");
+          }
+        } else {
+          const previousUserId = currentUser?.id || null;
+          const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+          if (error) throw error;
+          if (previousUserId && previousUserId !== data.user.id) clearLocalUserState();
+          await finishAuth(data.user, modal, "Signed in. Syncing your Winter Arc…");
+        }
+      } catch (error) {
+        authBusy = false;
+        submit.disabled = false;
+        toggle.disabled = false;
+        setAuthMessage(modal, error?.message || "Authentication failed. Please try again.", "error");
         renderAuthState();
-      } else {
-        message.textContent = "Account created. Check your email if confirmation is enabled, then sign in.";
       }
     });
+
+    modal.querySelector("[data-signup]").addEventListener("click", () => {
+      if (authBusy) return;
+      const submit = modal.querySelector("[data-auth-submit]");
+      setAuthMode(modal, submit.dataset.mode === "signup" ? "signin" : "signup");
+      setAuthMessage(modal, "", "info");
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !modal.hidden && !authBusy) closeAuthModal(modal);
+    });
+    openExistingAuthModal(modal);
   }
 
   function bindLocalAndCloudState() {
@@ -453,17 +533,14 @@
     });
   }
 
-  function bindTheme() {
-    document.querySelectorAll("[data-theme]").forEach((b) =>
-      b.addEventListener("click", () => {
-        document.body.classList.toggle("dark");
-        localStorage.setItem(localKey("dark"), document.body.classList.contains("dark") ? "true" : "false");
-      })
-    );
-    if (getState("dark") === "true") document.body.classList.add("dark");
-  }
-
-  async function boot() {
+  function applyTheme(dark, persist = true) {
+    document.body.classList.toggle("dark", Boolean(dark));
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+    document.querySelectorAll("[data-theme]").forEach((button) => {
+      button.setAttribute("aria-pressed", dark ? "true" : "false");
+      button.textContent = dark ? "☀ light" : "◐ dark";
+    });
+    i  async function boot() {
     if (!window.WINTER_ARC_CONFIG) {
       try { await loadScript("supabase-config.js"); } catch (_) {}
     }
@@ -471,7 +548,11 @@
     bindTheme();
     bindLocalAndCloudState();
     await initCloud();
-    if (currentUser) { applyStateToPage(); await loadDay1FromCloud(); }
+
+    if (currentUser) {
+      applyStateToPage();
+      await loadDay1FromCloud();
+    }
 
     if (supabase) {
       supabase.auth.onAuthStateChange(async (_event, session) => {
@@ -482,10 +563,14 @@
         }
         currentUser = nextUser;
         renderAuthState();
-        if (currentUser) { await pullCloudState(); await migrateStructuredContent(); }
-        if (currentUser) await loadDay1FromCloud();
+        if (currentUser) {
+          await pullCloudState();
+          await migrateStructuredContent();
+          await loadDay1FromCloud();
+        }
       });
     }
+    window.WINTER_ARC_READY = Promise.resolve({ client: supabase, user: currentUser });
   }
 
   async function getPublicShare() {
@@ -664,7 +749,7 @@
     return data;
   }
 
-  window.WINTER_ARC_APP={getClient:()=>supabase,getUser:()=>currentUser,getPublicShare,buildPublicSnapshot,savePublicShare,getStructuredRows,insertStructuredRow,updateStructuredRow,deleteStructuredRow,refreshPublicSnapshot};
+  window.WINTER_ARC_APP={getClient:()=>supabase,getUser:()=>currentUser,getPublicShare,buildPublicSnapshot,savePublicShare,getStructuredRows,insertStructuredRow,updateStructuredRow,deleteStructuredRow,refreshPublicSnapshot,applyTheme,ready:()=>window.WINTER_ARC_READY||Promise.resolve({client:supabase,user:currentUser})};
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", boot, { once: true });
