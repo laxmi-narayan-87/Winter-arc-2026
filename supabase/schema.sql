@@ -55,7 +55,8 @@ to authenticated
 using ((select auth.uid()) = user_id)
 with check ((select auth.uid()) = user_id);
 
-drop policy if exists "users can delete their own state" on public.user_state
+drop policy if exists "users can delete their own state" on public.user_state;
+create policy "users can delete their own state" on public.user_state
 for delete
 to authenticated
 using ((select auth.uid()) = user_id);
