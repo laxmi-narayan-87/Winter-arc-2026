@@ -39,7 +39,7 @@
     if (!hasConfig()) return;
     try {
       if (!window.supabase) {
-        await loadScript("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2");
+        await loadScript("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2");
       }
       const config = getConfig();
       supabase = window.supabase.createClient(
