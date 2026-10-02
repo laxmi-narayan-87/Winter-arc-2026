@@ -4,8 +4,21 @@
 (() => {
   const dayCard=document.getElementById('home-day'), status=document.getElementById('auth-status'), cloudTitle=document.getElementById('home-cloud-title'), cloudCopy=document.getElementById('home-cloud-copy');
   const safeText=(el,text)=>{if(el)el.textContent=text};
-  async function waitForClient(){for(let i=0;i<80;i++){if(window.WINTER_ARC_SUPABASE)return window.WINTER_ARC_SUPABASE;await new Promise(r=>setTimeout(r,100));}return null;}
-  async function load(){const client=await waitForClient();if(!client){safeText(status,'Cloud unavailable');safeText(cloudTitle,'Supabase unavailable');safeText(cloudCopy,'Check your Supabase configuration.');safeText(dayCard,'Unable to connect to the database.');return;}const {data:{user}}=await client.auth.getUser();if(!user){safeText(status,'Sign in');safeText(cloudTitle,'Private cloud');dayCard.innerHTML='<div class="home-empty">Sign in from the site header to load your private Winter Arc progress from Supabase.</div>';return;}safeText(status,user.email||'Signed in');safeText(cloudTitle,'Supabase connected');safeText(cloudCopy,'Your task template and completion state are being read from the database.');const {data:template,error:te}=await client.from('day_templates').select('day_number,day_date,title,tasks').eq('day_number',1).single();if(te){dayCard.innerHTML='<div class="home-empty">Day 1 could not be loaded from Supabase.</div>';return;}const {data:row}=await client.from('user_state').select('value').eq('state_key','day:2026-10-01').maybeSingle();const record=row?.value||{};const done=new Set(Array.isArray(record.completed_task_ids)?record.completed_task_ids:[]);const tasks=Array.isArray(template.tasks)?template.tasks:[];dayCard.innerHTML='<span class="micro">'+template.title+' · '+template.day_date+'</span><h2>'+done.size+' / '+tasks.length+' complete</h2><div class="home-list"></div>'+(done.size===tasks.length&&tasks.length?'<p class="home-status">Day 1 is complete ✓</p>':'');const list=dayCard.querySelector('.home-list');tasks.forEach(t=>{const row=document.createElement('label');row.className='home-task';const input=document.createElement('input');input.type='checkbox';input.disabled=true;input.checked=done.has(t.id);const copy=document.createElement('span');copy.textContent=t.title+(t.detail?' · '+t.detail:'');row.append(input,copy);list.append(row);});}
-  load();
+  async function load(client,user){
+    if(!client){safeText(status,'Cloud unavailable');safeText(cloudTitle,'Supabase unavailable');safeText(cloudCopy,'Check your Supabase configuration.');dayCard.innerHTML='<div class="home-empty">Unable to connect to the database.</div>';return;}
+    if(!user){safeText(status,'Sign in');safeText(cloudTitle,'Private cloud');dayCard.innerHTML='<div class="home-empty">Sign in from the site header to load your private Winter Arc progress from Supabase.</div>';return;}
+    safeText(status,user.email||'Signed in');safeText(cloudTitle,'Supabase connected');safeText(cloudCopy,'Your task template and completion state are being read from the database.');
+    const todayKey=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+    const {data:template,error:te}=await client.from('day_templates').select('day_number,day_date,title,tasks').eq('day_date',todayKey).maybeSingle();
+    if(te){dayCard.innerHTML='<div class="home-empty">Today could not be loaded from Supabase.</div>';return;}
+    if(!template){dayCard.innerHTML='<div class="home-empty">No plan published for today.</div>';return;}
+    const {data:row}=await client.from('user_state').select('value').eq('state_key','day:'+todayKey).maybeSingle();
+    const record=row?.value||{};const done=new Set(Array.isArray(record.completed_task_ids)?record.completed_task_ids:[]);
+    const tasks=Array.isArray(template.tasks)?template.tasks:[];const completed=tasks.filter(t=>done.has(t.id)).length;
+    dayCard.innerHTML='<span class="micro">Day '+template.day_number+' · '+template.day_date+'</span><h2>'+completed+' / '+tasks.length+' complete</h2><div class="home-list"></div>'+(completed===tasks.length&&tasks.length?'<p class="home-status">Today is complete ✓</p>':'');
+    const list=dayCard.querySelector('.home-list');tasks.forEach(t=>{const row=document.createElement('label');row.className='home-task';const input=document.createElement('input');input.type='checkbox';input.disabled=true;input.checked=done.has(t.id);const copy=document.createElement('span');copy.textContent=t.title+(t.detail?' · '+t.detail:'');row.append(input,copy);list.append(row);});
+  }
+  async function boot(){const app=window.WINTER_ARC_APP;if(!app)return;const ready=await app.ready();await load(ready.client,ready.user);if(ready.client)ready.client.auth.onAuthStateChange(async(_event,session)=>await load(ready.client,session?.user||null));}
+  boot();
 })();
 </script></body></html>
