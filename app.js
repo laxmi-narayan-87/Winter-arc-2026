@@ -58,6 +58,7 @@
       currentUser = data?.user || null;
       if (currentUser) {
         await pullCloudState();
+        await migrateStructuredContent();
       }
       cloudReady = true;
       window.WINTER_ARC_SUPABASE = supabase;
@@ -129,24 +130,31 @@
     await refreshPublicSnapshot();
   }
 
+  const refreshTimers = new Map();
+
+  function schedulePublicRefresh(delay = 700) {
+    if (!supabase || !currentUser) return;
+    clearTimeout(refreshTimers.get("public"));
+    refreshTimers.set("public", setTimeout(() => {
+      refreshPublicSnapshot();
+    }, delay));
+  }
+
   async function saveState(stateKey, value) {
     localStorage.setItem(localKey(stateKey), String(value));
-
     if (!supabase || !currentUser) return;
 
-    // Serialize writes per key so rapid slider input cannot race.
     const previous = pendingWrites.get(stateKey) || Promise.resolve();
     const next = previous.then(async () => {
       const { error } = await supabase.from("user_state").upsert(
-        {
-          user_id: currentUser.id,
-          state_key: stateKey,
-          value: JSON.stringify(String(value))
-        },
+        { user_id: currentUser.id, state_key: stateKey, value: JSON.stringify(String(value)) },
         { onConflict: "user_id,state_key" }
       );
-      if (error) console.warn("Could not save private state:", error.message);
-      else await refreshPublicSnapshot();
+      if (error) {
+        console.warn("Could not save private state:", error.message);
+        return;
+      }
+      schedulePublicRefresh();
     });
     pendingWrites.set(stateKey, next.catch(() => {}));
     await next;
@@ -448,7 +456,7 @@
         }
         currentUser = nextUser;
         renderAuthState();
-        if (currentUser) await pullCloudState();
+        if (currentUser) { await pullCloudState(); await migrateStructuredContent(); }
         if (currentUser) await loadDay1FromCloud();
       });
     }
@@ -461,42 +469,118 @@
     return data;
   }
 
+  async function getStructuredRows(table, select = "*", order = null) {
+    if (!supabase || !currentUser) throw new Error("Sign in first.");
+    let query = supabase.from(table).select(select).eq("user_id", currentUser.id);
+    if (order) query = query.order(order.column, { ascending: order.ascending !== false });
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  }
+
+  async function insertStructuredRow(table, row) {
+    if (!supabase || !currentUser) throw new Error("Sign in first.");
+    const { data, error } = await supabase.from(table).insert({ ...row, user_id: currentUser.id }).select().single();
+    if (error) throw error;
+    schedulePublicRefresh(100);
+    return data;
+  }
+
+  async function updateStructuredRow(table, id, row) {
+    if (!supabase || !currentUser) throw new Error("Sign in first.");
+    const { data, error } = await supabase.from(table).update(row).eq("id", id).eq("user_id", currentUser.id).select().single();
+    if (error) throw error;
+    schedulePublicRefresh(100);
+    return data;
+  }
+
+  async function deleteStructuredRow(table, id) {
+    if (!supabase || !currentUser) throw new Error("Sign in first.");
+    const { error } = await supabase.from(table).delete().eq("id", id).eq("user_id", currentUser.id);
+    if (error) throw error;
+    schedulePublicRefresh(100);
+  }
+
+  async function migrateStructuredContent() {
+    if (!supabase || !currentUser) return;
+    try {
+      const [{data: skills},{data: projects},{data: milestones},{data: learning},{data: timeline}] = await Promise.all([
+        supabase.from("skills").select("id").eq("user_id", currentUser.id).limit(1),
+        supabase.from("projects").select("id").eq("user_id", currentUser.id).limit(1),
+        supabase.from("milestones").select("id").eq("user_id", currentUser.id).limit(1),
+        supabase.from("learning_entries").select("id").eq("user_id", currentUser.id).limit(1),
+        supabase.from("timeline_entries").select("id").eq("user_id", currentUser.id).limit(1)
+      ]);
+      if (!(skills||[]).length) {
+        const skillSeed=[["Python",82],["AI / ML",76],["Backend",68],["System design",58]];
+        await supabase.from("skills").insert(skillSeed.map(([name,level])=>({user_id:currentUser.id,name,level})));
+      }
+      if (!(projects||[]).length) {
+        await supabase.from("projects").insert([
+          {user_id:currentUser.id,name:"DarkSense AI",description:"Dark-pattern detection through browser automation, data collection, screenshots, and machine learning.",status:"in_progress",progress:72},
+          {user_id:currentUser.id,name:"Portfolio",description:"A living record of projects, experiments, skills, and work worth showing.",status:"in_progress",progress:54}
+        ]);
+      }
+      if (!(milestones||[]).length) {
+        await supabase.from("milestones").insert([
+          {user_id:currentUser.id,name:"First meaningful build",description:"Something exists outside your notes."},
+          {user_id:currentUser.id,name:"Ship it",description:"Put a finished version in front of someone."},
+          {user_id:currentUser.id,name:"Survive a hard week",description:"Keep the minimum viable routine alive."},
+          {user_id:currentUser.id,name:"Season review",description:"Look back and decide what comes next."}
+        ]);
+      }
+      if (!(learning||[]).length) {
+        await supabase.from("learning_entries").insert([
+          {user_id:currentUser.id,topic:"System design",note:"Queues, caching, databases, APIs, reliability."},
+          {user_id:currentUser.id,topic:"Machine learning",note:"Transformers, evaluation, data pipelines."},
+          {user_id:currentUser.id,topic:"Testing & automation",note:"Selenium, test strategy, reliable automation."}
+        ]);
+      }
+      if (!(timeline||[]).length) {
+        await supabase.from("timeline_entries").insert([
+          {user_id:currentUser.id,title:"Begin with intention",description:"Decide what this season is for before filling it with tasks.",status:"done"},
+          {user_id:currentUser.id,title:"Build a rhythm",description:"Turn small actions into routines that can survive ordinary days.",status:"done"},
+          {user_id:currentUser.id,title:"Make something real",description:"Ship a project, finish a course, publish an idea, or create evidence of progress.",status:"planned"},
+          {user_id:currentUser.id,title:"Review and adjust",description:"Keep what works. Change what does not.",status:"planned"}
+        ]);
+      }
+    } catch (error) {
+      console.warn("Structured content migration skipped:", error.message);
+    }
+  }
+
   async function buildPublicSnapshot(settings) {
     if (!supabase || !currentUser) throw new Error("Sign in first.");
-    const safe = { ...(settings || {}) };
+    const safe = {
+      progress:true, streak:true, daily_tasks:false, projects:false, skills:false,
+      milestones:false, learning:false, timeline:false, fitness:false, notes:false,
+      ...(settings || {})
+    };
     const { data: rows, error } = await supabase.from("user_state").select("state_key,value").eq("user_id", currentUser.id);
     if (error) throw error;
     const state = Object.fromEntries((rows || []).map(r => [r.state_key, r.value]));
     const { data: templates, error: te } = await supabase.from("day_templates").select("day_number,day_date,title,tasks").order("day_number");
     if (te) throw te;
-    const days = (templates || []).map(t => {
-      const record = state["day:" + t.day_date] || {};
-      const ids = Array.isArray(record.completed_task_ids) ? record.completed_task_ids : [];
-      const tasks = Array.isArray(t.tasks) ? t.tasks : [];
-      return { day:t.day_number, date:t.day_date, title:t.title, completed:ids.length, total:tasks.length,
-        complete:tasks.length > 0 && ids.length >= tasks.length,
-        ...(safe.daily_tasks ? {tasks:tasks.map(x=>({title:x.title||"Task",detail:x.detail||"",complete:ids.includes(x.id)}))} : {}) };
+    const days=(templates||[]).map(t=>{
+      const record=state["day:"+t.day_date]||{};
+      const ids=Array.isArray(record.completed_task_ids)?record.completed_task_ids:[];
+      const tasks=Array.isArray(t.tasks)?t.tasks:[];
+      return {day:t.day_number,date:t.day_date,title:t.title,completed:ids.filter(id=>tasks.some(x=>x.id===id)).length,total:tasks.length,complete:tasks.length>0&&ids.length>=tasks.length,...(safe.daily_tasks?{tasks:tasks.map(x=>({title:x.title||"Task",detail:x.detail||"",complete:ids.includes(x.id)}))}:{})};
     });
-    const completedDays=days.filter(d=>d.complete).length;
-    const totalTasks=days.reduce((n,d)=>n+d.total,0);
-    const completedTasks=days.reduce((n,d)=>n+d.completed,0);
-    let streak=0;
-    for(let i=days.length-1;i>=0;i--){if(!days[i].complete)break;streak++;}
-    return {
-      version:1, generated_at:new Date().toISOString(),
-      ...(safe.progress?{progress:{days_completed:completedDays,days_total:days.length,tasks_completed:completedTasks,tasks_total:totalTasks,completion_rate:totalTasks?Math.round(completedTasks/totalTasks*100):0}}:{}),
-      ...(safe.streak?{streak:{current:streak}}:{}),
-      ...(safe.daily_tasks?{days}:{}),
-      ...(safe.notes && typeof state.todayNote==="string"?{note:state.todayNote}:{}),
-      ...(safe.projects?{projects:Array.isArray(state.projects)?state.projects:[]}:{}),
-      ...(safe.skills?{skills:[
-        ["Python",state["skill:python"]],["AI / ML",state["skill:ai"]],["Backend",state["skill:backend"]],["System design",state["skill:system"]]
-      ].filter(x=>x[1]!==undefined).map(x=>({name:x[0],level:Number(x[1])||0}))}:{}),
-      ...(safe.milestones?{milestones:Object.keys(state).filter(k=>k.startsWith("milestone:")).map(k=>({name:k.slice(10).replace(/-/g," "),complete:state[k]==="1"||state[k]===true}))}:{}),
-      ...(safe.learning?{learning:state.learningNote?{note:state.learningNote}:[]}:{}),
-      ...(safe.timeline?{timeline:Array.isArray(state.timeline)?state.timeline:[]}:{}),
-      ...(safe.fitness?{fitness:state.fitness||{}}:{})
-    };
+    const completedDays=days.filter(d=>d.complete).length,totalTasks=days.reduce((n,d)=>n+d.total,0),completedTasks=days.reduce((n,d)=>n+d.completed,0);
+    let streak=0; for(let i=days.length-1;i>=0;i--){if(!days[i].complete)break;streak++;}
+    const snap={version:2,generated_at:new Date().toISOString()};
+    if(safe.progress) snap.progress={days_completed:completedDays,days_total:days.length,tasks_completed:completedTasks,tasks_total:totalTasks,completion_rate:totalTasks?Math.round(completedTasks/totalTasks*100):0};
+    if(safe.streak) snap.streak={current:streak};
+    if(safe.daily_tasks) snap.days=days;
+    if(safe.notes && typeof state.todayNote==="string") snap.note=state.todayNote;
+    if(safe.projects) snap.projects=await getStructuredRows("projects","id,name,description,status,progress,url",{column:"created_at",ascending:false});
+    if(safe.skills) snap.skills=(await getStructuredRows("skills","id,name,level,evidence",{column:"name"})).map(x=>({name:x.name,level:x.level,evidence:x.evidence}));
+    if(safe.milestones) snap.milestones=await getStructuredRows("milestones","id,name,description,complete,completed_at",{column:"created_at",ascending:true});
+    if(safe.learning) snap.learning=await getStructuredRows("learning_entries","id,topic,note,learned_at",{column:"learned_at",ascending:false});
+    if(safe.timeline) snap.timeline=await getStructuredRows("timeline_entries","id,title,description,entry_date,status",{column:"entry_date"});
+    if(safe.fitness) snap.fitness=state.fitness||{};
+    return snap;
   }
 
   async function refreshPublicSnapshot() {
@@ -522,7 +606,7 @@
     return data;
   }
 
-  window.WINTER_ARC_APP={getClient:()=>supabase,getUser:()=>currentUser,getPublicShare,buildPublicSnapshot,savePublicShare};
+  window.WINTER_ARC_APP={getClient:()=>supabase,getUser:()=>currentUser,getPublicShare,buildPublicSnapshot,savePublicShare,getStructuredRows,insertStructuredRow,updateStructuredRow,deleteStructuredRow};
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", boot, { once: true });
