@@ -126,6 +126,7 @@
     }
     localStorage.setItem(localKey(stateKey), JSON.stringify(value));
     day1Record = stateKey === "day:2026-10-01" ? value : day1Record;
+    await refreshPublicSnapshot();
   }
 
   async function saveState(stateKey, value) {
@@ -145,6 +146,7 @@
         { onConflict: "user_id,state_key" }
       );
       if (error) console.warn("Could not save private state:", error.message);
+      else await refreshPublicSnapshot();
     });
     pendingWrites.set(stateKey, next.catch(() => {}));
     await next;
@@ -493,6 +495,18 @@
       ...(safe.timeline?{timeline:Array.isArray(state.timeline)?state.timeline:[]}:{}),
       ...(safe.fitness?{fitness:state.fitness||{}}:{})
     };
+  }
+
+  async function refreshPublicSnapshot() {
+    if (!supabase || !currentUser) return;
+    try {
+      const { data: share, error } = await supabase.from("public_shares").select("enabled,settings,share_slug,display_name").eq("user_id", currentUser.id).maybeSingle();
+      if (error || !share?.enabled) return;
+      const snapshot = await buildPublicSnapshot(share.settings || {});
+      await supabase.from("public_shares").update({ snapshot }).eq("user_id", currentUser.id);
+    } catch (error) {
+      console.warn("Could not refresh public snapshot:", error.message);
+    }
   }
 
   async function savePublicShare({shareSlug,displayName,enabled,settings}) {
