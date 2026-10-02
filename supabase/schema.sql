@@ -279,7 +279,7 @@ drop policy if exists "owners delete own rows" on public.timeline_entries;
 create policy "owners delete own rows" on public.timeline_entries for delete to authenticated using ((select auth.uid()) = user_id);
 
 -- Keep the public profile schema conservative even for manually-created rows.
-alter table public.public_shares alter column settings set default '{"progress":true,"streak":true,"daily_tasks":false,"projects":false,"skills":false,"milestones":false,"learning":false,"timeline":false,"fitness":false,"notes":false}'::jsonb;
+alter table public.public_shares alter column settings set default '{"progress":true,"streak":true,"today_progress":false,"daily_tasks":false,"projects":false,"skills":false,"milestones":false,"learning":false,"timeline":false,"fitness":false,"notes":false}'::jsonb;
 
 
 -- Public projection: anonymous readers can only access intentionally public fields.
