@@ -489,9 +489,11 @@
       ...(safe.daily_tasks?{days}:{}),
       ...(safe.notes && typeof state.todayNote==="string"?{note:state.todayNote}:{}),
       ...(safe.projects?{projects:Array.isArray(state.projects)?state.projects:[]}:{}),
-      ...(safe.skills?{skills:Array.isArray(state.skills)?state.skills:[]}:{}),
-      ...(safe.milestones?{milestones:Array.isArray(state.milestones)?state.milestones:[]}:{}),
-      ...(safe.learning?{learning:Array.isArray(state.learning)?state.learning:[]}:{}),
+      ...(safe.skills?{skills:[
+        ["Python",state["skill:python"]],["AI / ML",state["skill:ai"]],["Backend",state["skill:backend"]],["System design",state["skill:system"]]
+      ].filter(x=>x[1]!==undefined).map(x=>({name:x[0],level:Number(x[1])||0}))}:{}),
+      ...(safe.milestones?{milestones:Object.keys(state).filter(k=>k.startsWith("milestone:")).map(k=>({name:k.slice(10).replace(/-/g," "),complete:state[k]==="1"||state[k]===true}))}:{}),
+      ...(safe.learning?{learning:state.learningNote?{note:state.learningNote}:[]}:{}),
       ...(safe.timeline?{timeline:Array.isArray(state.timeline)?state.timeline:[]}:{}),
       ...(safe.fitness?{fitness:state.fitness||{}}:{})
     };
